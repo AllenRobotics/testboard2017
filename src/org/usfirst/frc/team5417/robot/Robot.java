@@ -2,7 +2,10 @@ package org.usfirst.frc.team5417.robot;
 
 import edu.wpi.first.wpilibj.RobotDrive;
 import edu.wpi.first.wpilibj.SampleRobot;
+import edu.wpi.first.wpilibj.Solenoid;
+import edu.wpi.first.wpilibj.Spark;
 import edu.wpi.first.wpilibj.CameraServer;
+import edu.wpi.first.wpilibj.Compressor;
 import edu.wpi.first.wpilibj.GenericHID;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.Timer;
@@ -10,6 +13,7 @@ import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.GenericHID.Hand;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import com.ctre.CANTalon;
 
 /**
  * This is a demo program showing the use of the RobotDrive class. The
@@ -30,11 +34,23 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
  */
 public class Robot extends SampleRobot {
 	//private CameraServer cameraServer;
-	RobotDrive myRobot = new RobotDrive(0, 1);
 	// XboxController stick = new XboxController(0);
 	// XboxController stick1 = new XboxController(1);
-	Joystick stick = new Joystick(0);
-	Joystick stick1 = new Joystick(1);
+	CANTalon leftFrontMotor = new CANTalon(0);
+	CANTalon leftRearMotor = new CANTalon(1);
+	CANTalon rightFrontMotor = new CANTalon(2);
+	CANTalon rightRearMotor = new CANTalon(3);
+	Spark shooterMotor1 = new Spark(0);
+	Spark shooterMotor2 = new Spark(1);
+	Spark intakeMotor = new Spark(2);
+	Joystick driverStick = new Joystick(0);
+	Joystick manipulatorStick = new Joystick(1);
+	Solenoid gearSolenoid = new Solenoid(0,0);
+	Solenoid shooterSolenoid1 = new Solenoid(0, 1);
+	Solenoid shooterSolenoid2 = new Solenoid(0,2);
+	Compressor compressor = new Compressor(0);
+	boolean setup = false;
+	RobotDrive myRobot = new RobotDrive(leftFrontMotor, leftRearMotor, rightFrontMotor, rightRearMotor);
 
 	final String defaultAuto = "Default Autonomous";
 	final String customAuto = "My Auto";
@@ -49,6 +65,7 @@ public class Robot extends SampleRobot {
 		chooser.addDefault("Default Auto", defaultAuto);
 		chooser.addObject("My Auto", customAuto);
 		SmartDashboard.putData("Auto modes", chooser);
+		compressor.start();
 	}
 
 	/**
@@ -85,24 +102,67 @@ public class Robot extends SampleRobot {
 			break;
 		}
 	}
-
 	/*
 	 * Runs the motors with tank steering.
 	 */
+	/*
+	@Override*/
+	/*protected void disabled() {
+		if (isInitialized) {
+			doOneTimeShutdown();
+			isInitialized = false;
+		}
+	}*/
+	
 	@Override
 	public void operatorControl() {
+
+				
 		myRobot.setSafetyEnabled(true);
 		while (isOperatorControl() && isEnabled()) {
+			
 			// myRobot.tankDrive(stick.getY(Hand.kLeft),
 			// stick.getY(Hand.kRight)); // drive with tank style (use right +
 			// left stick)
 			// myRobot.TankDrive(stick.GetRawAxis(<left_y_axis>),
 			// stick.GetRawAxis(<right_y_axis>));
-			myRobot.tankDrive(stick.getRawAxis(1), stick.getRawAxis(5));
+			myRobot.tankDrive(driverStick.getRawAxis(1), driverStick.getRawAxis(5));
 			Timer.delay(0.005); // wait for a motor update time
+			if (driverStick.getRawButton(1) == true) //detects if the A button is pressed more than halfway
+				gearSolenoid.set(true); // extends gear piston
+			else gearSolenoid.set(false);
+			
+			if (manipulatorStick.getRawAxis(2) >=.5) { // detects if left trigger is pressed more than halfway
+				shooterSolenoid1.set(false); // retracts piston, lets balls enter shooter
+				shooterMotor1.set(1); // activates shooter motor
+			}
+			else {
+				shooterSolenoid1.set(true); 
+				shooterMotor1.set(0);
+			}
+			if (manipulatorStick.getRawAxis(3) >=.5) {
+				shooterSolenoid2.set(false);
+				shooterMotor2.set(-1);
+			}
+			else {
+				shooterSolenoid2.set(true);
+				shooterMotor2.set(0);
+			}
+			
+			if (driverStick.getRawAxis(3) >=.5)
+				intakeMotor.set(1);
+			else if (driverStick.getRawButton(5)) 
+				intakeMotor.set(-1);
+			else intakeMotor.set(0);
+			
+			
+			boolean switchPressure = compressor.getPressureSwitchValue();
+			boolean compressorState = compressor.enabled();
+
+			SmartDashboard.putString("DB/String 0", "compressor state:" + compressorState);
+			SmartDashboard.putString("DB/String 1", "Pressure switch:" + switchPressure);
 		}
 	}
-
 	/**
 	 * Runs during test mode
 	 */
