@@ -6,6 +6,8 @@ import edu.wpi.first.wpilibj.Solenoid;
 import edu.wpi.first.wpilibj.Spark;
 import edu.wpi.first.wpilibj.CameraServer;
 import edu.wpi.first.wpilibj.Compressor;
+import edu.wpi.first.wpilibj.DoubleSolenoid;
+import edu.wpi.first.wpilibj.DoubleSolenoid.Value;
 import edu.wpi.first.wpilibj.GenericHID;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.Timer;
@@ -43,14 +45,22 @@ public class Robot extends SampleRobot {
 	Spark shooterMotor1 = new Spark(0);
 	Spark shooterMotor2 = new Spark(1);
 	Spark intakeMotor = new Spark(2);
-	Joystick driverStick = new Joystick(0);
+	Spark climberMotor1 = new Spark(3);
+	Spark climberMotor2 = new Spark(4);
 	Joystick manipulatorStick = new Joystick(1);
-	Solenoid gearSolenoid = new Solenoid(0,0);
-	Solenoid shooterSolenoid1 = new Solenoid(0, 1);
-	Solenoid shooterSolenoid2 = new Solenoid(0,2);
+//	Solenoid gearSolenoid = new Solenoid(0,0);
+	//DoubleSolenoid gearSolenoid = new DoubleSolenoid(0,1);
+//	Solenoid shooterSolenoid1 = new Solenoid(0, 1);
+//	Solenoid shooterSolenoid2 = new Solenoid(0,2);
 	Compressor compressor = new Compressor(0);
-	boolean setup = false;
+	GearShift driveSystem;
+	DoubleSolenoid shiftSolenoid1 = new DoubleSolenoid(0,1);
+	DoubleSolenoid shiftSolenoid2 = new DoubleSolenoid(2,3);
 	RobotDrive myRobot = new RobotDrive(leftFrontMotor, leftRearMotor, rightFrontMotor, rightRearMotor);
+	boolean wasAPressed = false;
+	boolean buttonPress = false;
+	XBoxController driverStick = new XBoxController(new Joystick(0));
+//	TickUpdate ticks = new TickUpdate();
 
 	final String defaultAuto = "Default Autonomous";
 	final String customAuto = "My Auto";
@@ -66,6 +76,8 @@ public class Robot extends SampleRobot {
 		chooser.addObject("My Auto", customAuto);
 		SmartDashboard.putData("Auto modes", chooser);
 		compressor.start();
+		driveSystem = new GearShift(shiftSolenoid1, shiftSolenoid2);
+//		ticks.reset();
 	}
 
 	/**
@@ -116,49 +128,71 @@ public class Robot extends SampleRobot {
 	
 	@Override
 	public void operatorControl() {
-
-				
+		
 		myRobot.setSafetyEnabled(true);
 		while (isOperatorControl() && isEnabled()) {
+			
+			
 			
 			// myRobot.tankDrive(stick.getY(Hand.kLeft),
 			// stick.getY(Hand.kRight)); // drive with tank style (use right +
 			// left stick)
 			// myRobot.TankDrive(stick.GetRawAxis(<left_y_axis>),
 			// stick.GetRawAxis(<right_y_axis>));
-			myRobot.tankDrive(driverStick.getRawAxis(1), driverStick.getRawAxis(5));
+			myRobot.tankDrive(driverStick.getLYValue(), driverStick.getRYValue());
 			Timer.delay(0.005); // wait for a motor update time
-			if (driverStick.getRawButton(1) == true) //detects if the A button is pressed more than halfway
-				gearSolenoid.set(true); // extends gear piston
-			else gearSolenoid.set(false);
 			
+			// TODO: Need to figure out if we want this piston extended or retracted
+
+
+				if(driverStick.isFirstLBPressed()){
+					//driveSystem.gearSwitch(leftFrontMotor.get(), rightFrontMotor.get());
+
+					driveSystem.gearSwitch(driverStick.getLYValue(), driverStick.getRYValue());
+				}
+				
+			
+/*			
+			if (driverStick.getRawButton(1) == true && gearSolenoid.get() == Value.kReverse) //detects if the A button is pressed 
+				gearSolenoid.set(DoubleSolenoid.Value.kForward); // extends gear piston
+			else if (!driverStick.getRawButton(1) && gearSolenoid.get() == Value.kForward)
+				gearSolenoid.set(DoubleSolenoid.Value.kReverse);
+	
 			if (manipulatorStick.getRawAxis(2) >=.5) { // detects if left trigger is pressed more than halfway
 				shooterSolenoid1.set(false); // retracts piston, lets balls enter shooter
-				shooterMotor1.set(1); // activates shooter motor
-			}
+				shooterMotor1.set(-1); // activates shooter motor
+			}.
 			else {
 				shooterSolenoid1.set(true); 
 				shooterMotor1.set(0);
 			}
 			if (manipulatorStick.getRawAxis(3) >=.5) {
 				shooterSolenoid2.set(false);
-				shooterMotor2.set(-1);
+				shooterMotor2.set(1);
 			}
 			else {
 				shooterSolenoid2.set(true);
 				shooterMotor2.set(0);
 			}
-			
-			if (driverStick.getRawAxis(3) >=.5)
+*/
+			if (driverStick.getRTValue() >= .5)
 				intakeMotor.set(1);
-			else if (driverStick.getRawButton(5)) 
+			else if (driverStick.isRBHeldDown()) 
 				intakeMotor.set(-1);
 			else intakeMotor.set(0);
 			
+			if (manipulatorStick.getRawButton(1)){
+				climberMotor1.set(1); climberMotor2.set(1);
+			}
+			
+			else{
+			climberMotor1.set(0);
+			climberMotor2.set(0);
+			
+			}
 			
 			boolean switchPressure = compressor.getPressureSwitchValue();
 			boolean compressorState = compressor.enabled();
-
 			SmartDashboard.putString("DB/String 0", "compressor state:" + compressorState);
 			SmartDashboard.putString("DB/String 1", "Pressure switch:" + switchPressure);
 		}
