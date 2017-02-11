@@ -10,6 +10,7 @@ import edu.wpi.first.wpilibj.DoubleSolenoid;
 import edu.wpi.first.wpilibj.DoubleSolenoid.Value;
 import edu.wpi.first.wpilibj.GenericHID;
 import edu.wpi.first.wpilibj.Joystick;
+import edu.wpi.first.wpilibj.PIDController;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.GenericHID.Hand;
@@ -37,7 +38,6 @@ import edu.wpi.first.wpilibj.I2C;
  * instead if you're new.
  */
 public class Robot extends SampleRobot {
-	AHRS ahrs = new AHRS(I2C.Port.kMXP);
 	//private CameraServer cameraServer;
 	// XboxController stick = new XboxController(0);
 	// XboxController stick1 = new XboxController(1);
@@ -118,9 +118,6 @@ public class Robot extends SampleRobot {
 			Timer.delay(2.0); // for 2 seconds
 			myRobot.drive(0.0, 0.0); // stop robot
 			break;
-			
-		case otherAuto:
-			
 			
 		}
 	}
