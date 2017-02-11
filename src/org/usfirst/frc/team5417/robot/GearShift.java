@@ -19,12 +19,12 @@ public class GearShift {
 	
 	private GearSelection currentGear = kLowGear;
 	
-	DoubleSolenoid shiftSolenoid1;
-	DoubleSolenoid shiftSolenoid2;
+	Solenoid shiftSolenoid1;
+//	Solenoid shiftSolenoid2;
 	
-	public GearShift(DoubleSolenoid shiftSolenoid1, DoubleSolenoid shiftSolenoid2) {
+	public GearShift(Solenoid shiftSolenoid1) {
 		this.shiftSolenoid1 = shiftSolenoid1;
-		this.shiftSolenoid2 = shiftSolenoid2;
+	//	this.shiftSolenoid2 = shiftSolenoid2;
 	}
 
 	public GearSelection getCurrentGear() {
@@ -32,8 +32,8 @@ public class GearShift {
 	}
 
 	public void initGearShift() {
-		shiftSolenoid1.set(Value.kReverse);
-		shiftSolenoid2.set(Value.kReverse);
+		shiftSolenoid1.set(false);
+		//shiftSolenoid2.set(false);
 		SmartDashboard.putString("GearShift", "LowGear");
 	}
 	
@@ -42,14 +42,14 @@ public class GearShift {
 		if (leftMotorPower == 0 && rightMotorPower == 0) {
 			// switch to high gear if we're in low gear right now
 			if (this.getCurrentGear() == kLowGear) { 
-				shiftSolenoid1.set(Value.kForward);
-				shiftSolenoid2.set(Value.kForward);
+				shiftSolenoid1.set(true);
+				//shiftSolenoid2.set(true);
 				currentGear = kHighGear;
 			}
 			// otherwise, switch to low gear if we're in high gear right now
 			else {
-				shiftSolenoid1.set(Value.kReverse);
-				shiftSolenoid2.set(Value.kReverse);
+				shiftSolenoid1.set(false);
+			//	shiftSolenoid2.set(false);
 				currentGear = kLowGear;
 			}
 

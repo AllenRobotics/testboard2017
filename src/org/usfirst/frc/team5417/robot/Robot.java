@@ -16,6 +16,8 @@ import edu.wpi.first.wpilibj.GenericHID.Hand;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import com.ctre.CANTalon;
+import com.kauailabs.navx.frc.AHRS;
+import edu.wpi.first.wpilibj.I2C;
 
 /**
  * This is a demo program showing the use of the RobotDrive class. The
@@ -35,15 +37,18 @@ import com.ctre.CANTalon;
  * instead if you're new.
  */
 public class Robot extends SampleRobot {
+	AHRS ahrs = new AHRS(I2C.Port.kMXP);
 	//private CameraServer cameraServer;
 	// XboxController stick = new XboxController(0);
 	// XboxController stick1 = new XboxController(1);
-	CANTalon leftFrontMotor = new CANTalon(0);
-	CANTalon leftRearMotor = new CANTalon(1);
-	CANTalon rightFrontMotor = new CANTalon(2);
-	CANTalon rightRearMotor = new CANTalon(3);
-	Spark shooterMotor1 = new Spark(0);
-	Spark shooterMotor2 = new Spark(1);
+//	CANTalon leftFrontMotor = new CANTalon(0);
+//	CANTalon leftRearMotor = new CANTalon(1);
+//	CANTalon rightFrontMotor = new CANTalon(2);
+//	CANTalon rightRearMotor = new CANTalon(3);
+	Spark leftMotor = new Spark(0);
+	Spark rightMotor = new Spark(1);
+//	Spark shooterMotor1 = new Spark(0);
+//	Spark shooterMotor2 = new Spark(1);
 	Spark intakeMotor = new Spark(2);
 	Spark climberMotor1 = new Spark(3);
 	Spark climberMotor2 = new Spark(4);
@@ -54,9 +59,9 @@ public class Robot extends SampleRobot {
 //	Solenoid shooterSolenoid2 = new Solenoid(0,2);
 	Compressor compressor = new Compressor(0);
 	GearShift driveSystem;
-	DoubleSolenoid shiftSolenoid1 = new DoubleSolenoid(0,1);
-	DoubleSolenoid shiftSolenoid2 = new DoubleSolenoid(2,3);
-	RobotDrive myRobot = new RobotDrive(leftFrontMotor, leftRearMotor, rightFrontMotor, rightRearMotor);
+	Solenoid shiftSolenoid1 = new Solenoid(0,0);
+//	Solenoid shiftSolenoid2 = new Solenoid(0,1);
+	RobotDrive myRobot = new RobotDrive(leftMotor, rightMotor);
 	boolean wasAPressed = false;
 	boolean buttonPress = false;
 	XBoxController driverStick = new XBoxController(new Joystick(0));
@@ -64,6 +69,7 @@ public class Robot extends SampleRobot {
 
 	final String defaultAuto = "Default Autonomous";
 	final String customAuto = "My Auto";
+	final String otherAuto = "other auto";
 	SendableChooser<String> chooser = new SendableChooser<>();
 
 	public Robot() {
@@ -76,7 +82,7 @@ public class Robot extends SampleRobot {
 		chooser.addObject("My Auto", customAuto);
 		SmartDashboard.putData("Auto modes", chooser);
 		compressor.start();
-		driveSystem = new GearShift(shiftSolenoid1, shiftSolenoid2);
+		driveSystem = new GearShift(shiftSolenoid1);
 //		ticks.reset();
 	}
 
@@ -112,6 +118,10 @@ public class Robot extends SampleRobot {
 			Timer.delay(2.0); // for 2 seconds
 			myRobot.drive(0.0, 0.0); // stop robot
 			break;
+			
+		case otherAuto:
+			
+			
 		}
 	}
 	/*
