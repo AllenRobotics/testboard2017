@@ -126,13 +126,23 @@ public class Robot extends SampleRobot {
 		}
 	}*/
 	
+	public double getJoystickValueWithDeadZone(double value) {
+		double deadZone = 0.1;
+		
+		if (value > -deadZone && value < deadZone) {
+			value = 0;
+		}
+		return value;
+	}
+	
 	@Override
 	public void operatorControl() {
 		
 		myRobot.setSafetyEnabled(true);
 		while (isOperatorControl() && isEnabled()) {
 			
-			
+			double leftY = getJoystickValueWithDeadZone(driverStick.getLYValue());
+			double rightY = getJoystickValueWithDeadZone(driverStick.getRYValue());
 			
 			// myRobot.tankDrive(stick.getY(Hand.kLeft),
 			// stick.getY(Hand.kRight)); // drive with tank style (use right +
@@ -146,11 +156,22 @@ public class Robot extends SampleRobot {
 
 
 				if(driverStick.isFirstLBPressed()){
-					//driveSystem.gearSwitch(leftFrontMotor.get(), rightFrontMotor.get());
+					// for use with the real robot
+					//boolean didSwitchGears = driveSystem.gearSwitch(leftFrontMotor.get(), rightFrontMotor.get());
 
-					driveSystem.gearSwitch(driverStick.getLYValue(), driverStick.getRYValue());
+					// FOR TESTING ONLY - DO NOT USE WITH THE REAL ROBOT
+					boolean didSwitchGears = driveSystem.gearSwitch(leftY, rightY);
+					
+					
+					SmartDashboard.putBoolean("DidSwitchGears", didSwitchGears);
 				}
 				
+				if (driveSystem.getCurrentGear() == GearShift.kLowGear) {
+					SmartDashboard.putString("GearShift", "LowGear");
+				}
+				else {
+					SmartDashboard.putString("GearShift", "HighGear");
+				}
 			
 /*			
 			if (driverStick.getRawButton(1) == true && gearSolenoid.get() == Value.kReverse) //detects if the A button is pressed 
