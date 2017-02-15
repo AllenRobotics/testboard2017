@@ -7,6 +7,8 @@ public class XBoxController {
 	Joystick driverStick;
 	boolean wasLBPressed = false;
 	boolean LBbuttonPress = false;
+	boolean wasRBPressed = false;
+	boolean RBbuttonPress = false;
 
 	public XBoxController(Joystick driverStick) {
 		this.driverStick = driverStick;
@@ -32,6 +34,23 @@ public class XBoxController {
 		}
 		return LBbuttonPress;
 		
+	}
+	
+	public boolean isFirstRBPressed() {
+		if (driverStick.getRawButton(6)) {
+			if (wasRBPressed)
+				LBbuttonPress = false;
+			else
+				RBbuttonPress = true;
+
+			wasRBPressed = true;
+		}
+		
+		else {
+			wasRBPressed = false;
+			RBbuttonPress = false;
+		}
+		return RBbuttonPress;
 	}
 	public boolean isAHeldDown() {
 		return driverStick.getRawButton(1);
@@ -69,6 +88,12 @@ public class XBoxController {
 	}
 	public double getRYValue() {
 		return driverStick.getRawAxis(5);
+	}
+	public boolean isStartHeldDown() {
+		return driverStick.getRawButton(8);
+	}
+	public boolean isDPadUpHeldDown() {
+		return driverStick.getPOV(0) == 0;
 	}
 }
 

@@ -1,6 +1,7 @@
 package org.usfirst.frc.team5417.robot;
 
 import edu.wpi.first.wpilibj.RobotDrive;
+import edu.wpi.first.wpilibj.SPI;
 import edu.wpi.first.wpilibj.SampleRobot;
 import edu.wpi.first.wpilibj.Solenoid;
 import edu.wpi.first.wpilibj.Spark;
@@ -11,6 +12,7 @@ import edu.wpi.first.wpilibj.DoubleSolenoid.Value;
 import edu.wpi.first.wpilibj.GenericHID;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.PIDController;
+import edu.wpi.first.wpilibj.PIDOutput;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.GenericHID.Hand;
@@ -37,35 +39,43 @@ import edu.wpi.first.wpilibj.I2C;
  * be much more difficult under this system. Use IterativeRobot or Command-Based
  * instead if you're new.
  */
-public class Robot extends SampleRobot {
-	//private CameraServer cameraServer;
+public class Robot extends SampleRobot implements PIDOutput {
+	// private CameraServer cameraServer;
 	// XboxController stick = new XboxController(0);
 	// XboxController stick1 = new XboxController(1);
-//	CANTalon leftFrontMotor = new CANTalon(0);
-//	CANTalon leftRearMotor = new CANTalon(1);
-//	CANTalon rightFrontMotor = new CANTalon(2);
-//	CANTalon rightRearMotor = new CANTalon(3);
+	// CANTalon leftFrontMotor = new CANTalon(0);
+	// CANTalon leftRearMotor = new CANTalon(1);
+	// CANTalon rightFrontMotor = new CANTalon(2);
+	// CANTalon rightRearMotor = new CANTalon(3);
 	Spark leftMotor = new Spark(0);
 	Spark rightMotor = new Spark(1);
-//	Spark shooterMotor1 = new Spark(0);
-//	Spark shooterMotor2 = new Spark(1);
+	// Spark shooterMotor1 = new Spark(0);
+	// Spark shooterMotor2 = new Spark(1);
 	Spark intakeMotor = new Spark(2);
 	Spark climberMotor1 = new Spark(3);
 	Spark climberMotor2 = new Spark(4);
 	Joystick manipulatorStick = new Joystick(1);
-//	Solenoid gearSolenoid = new Solenoid(0,0);
-	//DoubleSolenoid gearSolenoid = new DoubleSolenoid(0,1);
-//	Solenoid shooterSolenoid1 = new Solenoid(0, 1);
-//	Solenoid shooterSolenoid2 = new Solenoid(0,2);
+	// Solenoid gearSolenoid = new Solenoid(0,0);
+	// DoubleSolenoid gearSolenoid = new DoubleSolenoid(0,1);
+	// Solenoid shooterSolenoid1 = new Solenoid(0, 1);
+	// Solenoid shooterSolenoid2 = new Solenoid(0,2);
 	Compressor compressor = new Compressor(0);
 	GearShift driveSystem;
-	Solenoid shiftSolenoid1 = new Solenoid(0,0);
-//	Solenoid shiftSolenoid2 = new Solenoid(0,1);
+	Solenoid shiftSolenoid1 = new Solenoid(0, 0);
+	Solenoid shiftSolenoid2 = new Solenoid(0, 1);
 	RobotDrive myRobot = new RobotDrive(leftMotor, rightMotor);
 	boolean wasAPressed = false;
 	boolean buttonPress = false;
 	XBoxController driverStick = new XBoxController(new Joystick(0));
-//	TickUpdate ticks = new TickUpdate();
+	AHRS ahrs;
+	PIDController turnController;
+	static final double kP = 10;
+	static final double kI = 20000;
+	static final double kD = 0.00;
+	static final double kF = 0.00;
+
+	static final double kToleranceDegrees = 0;
+	double rotateToAngleRate = 0;
 
 	final String defaultAuto = "Default Autonomous";
 	final String customAuto = "My Auto";
@@ -82,8 +92,14 @@ public class Robot extends SampleRobot {
 		chooser.addObject("My Auto", customAuto);
 		SmartDashboard.putData("Auto modes", chooser);
 		compressor.start();
-		driveSystem = new GearShift(shiftSolenoid1);
-//		ticks.reset();
+		driveSystem = new GearShift(shiftSolenoid1, shiftSolenoid2);
+
+		ahrs = new AHRS(I2C.Port.kMXP);
+		turnController = new PIDController(kP, kI, kD, kF, ahrs, this);
+		turnController.setInputRange(-180.0f, 180.0f);
+		turnController.setOutputRange(-0.5, 0.5);
+		turnController.setAbsoluteTolerance(kToleranceDegrees);
+		turnController.setContinuous(true);
 	}
 
 	/**
@@ -118,117 +134,147 @@ public class Robot extends SampleRobot {
 			Timer.delay(2.0); // for 2 seconds
 			myRobot.drive(0.0, 0.0); // stop robot
 			break;
-			
+
 		}
 	}
 	/*
 	 * Runs the motors with tank steering.
 	 */
 	/*
-	@Override*/
-	/*protected void disabled() {
-		if (isInitialized) {
-			doOneTimeShutdown();
-			isInitialized = false;
-		}
-	}*/
-	
+	 * @Override
+	 */
+	/*
+	 * protected void disabled() { if (isInitialized) { doOneTimeShutdown();
+	 * isInitialized = false; } }
+	 */
+
 	public double getJoystickValueWithDeadZone(double value) {
 		double deadZone = 0.1;
-		
+
 		if (value > -deadZone && value < deadZone) {
 			value = 0;
 		}
 		return value;
 	}
-	
+
 	@Override
 	public void operatorControl() {
-		
+
 		myRobot.setSafetyEnabled(true);
 		while (isOperatorControl() && isEnabled()) {
-			
+
 			double leftY = getJoystickValueWithDeadZone(driverStick.getLYValue());
 			double rightY = getJoystickValueWithDeadZone(driverStick.getRYValue());
-			
-			// myRobot.tankDrive(stick.getY(Hand.kLeft),
-			// stick.getY(Hand.kRight)); // drive with tank style (use right +
-			// left stick)
-			// myRobot.TankDrive(stick.GetRawAxis(<left_y_axis>),
-			// stick.GetRawAxis(<right_y_axis>));
-			myRobot.tankDrive(driverStick.getLYValue(), driverStick.getRYValue());
+
+			// apply rotateToAngleRate if necessary
+			if (turnController.isEnabled()) {
+				leftY = leftY / 2 + rotateToAngleRate;
+				rightY = rightY / 2 - rotateToAngleRate;
+
+			}
+			myRobot.tankDrive(leftY, rightY);
 			Timer.delay(0.005); // wait for a motor update time
+
+			// TODO: Need to figure out if we want this piston extended or
+			// retracted
+
+			// ///////////////////////////////////////////////////////
+			// BEGIN BUTTON IF ELSE SECTION
+			//
+			//
+
+			// gear shift section
+			if (driverStick.isFirstLBPressed()) {
+				// for use with the real robot
+				// boolean didSwitchGears =
+				// driveSystem.gearSwitch(leftFrontMotor.get(),
+				// rightFrontMotor.get());
+
+				// FOR TESTING ONLY - DO NOT USE WITH THE REAL ROBOT
+				driveSystem.gearShiftLow(leftY, rightY);
+
+			} else if (driverStick.isFirstRBPressed()) {
+				driveSystem.gearShiftHigh(leftY, rightY);
+			}
+			// navX control section
+			else if (driverStick.isStartHeldDown()) {
+				ahrs.reset();
+				turnController.setSetpoint(ahrs.getAngle());
+			}
+
+			// Drive straight enable/disable
+			if (driverStick.isDPadUpHeldDown()) {
+				turnController.enable();
+			} else {
+				turnController.disable();
+			}
 			
-			// TODO: Need to figure out if we want this piston extended or retracted
-
-
-				if(driverStick.isFirstLBPressed()){
-					// for use with the real robot
-					//boolean didSwitchGears = driveSystem.gearSwitch(leftFrontMotor.get(), rightFrontMotor.get());
-
-					// FOR TESTING ONLY - DO NOT USE WITH THE REAL ROBOT
-					boolean didSwitchGears = driveSystem.gearSwitch(leftY, rightY);
-					
-					
-					SmartDashboard.putBoolean("DidSwitchGears", didSwitchGears);
-				}
-				
-				if (driveSystem.getCurrentGear() == GearShift.kLowGear) {
-					SmartDashboard.putString("GearShift", "LowGear");
-				}
-				else {
-					SmartDashboard.putString("GearShift", "HighGear");
-				}
 			
-/*			
-			if (driverStick.getRawButton(1) == true && gearSolenoid.get() == Value.kReverse) //detects if the A button is pressed 
-				gearSolenoid.set(DoubleSolenoid.Value.kForward); // extends gear piston
-			else if (!driverStick.getRawButton(1) && gearSolenoid.get() == Value.kForward)
-				gearSolenoid.set(DoubleSolenoid.Value.kReverse);
-	
-			if (manipulatorStick.getRawAxis(2) >=.5) { // detects if left trigger is pressed more than halfway
-				shooterSolenoid1.set(false); // retracts piston, lets balls enter shooter
-				shooterMotor1.set(-1); // activates shooter motor
-			}.
-			else {
-				shooterSolenoid1.set(true); 
-				shooterMotor1.set(0);
-			}
-			if (manipulatorStick.getRawAxis(3) >=.5) {
-				shooterSolenoid2.set(false);
-				shooterMotor2.set(1);
-			}
-			else {
-				shooterSolenoid2.set(true);
-				shooterMotor2.set(0);
-			}
-*/
+			// intake section
 			if (driverStick.getRTValue() >= .5)
 				intakeMotor.set(1);
-			else if (driverStick.isRBHeldDown()) 
+			else if (driverStick.getLTValue() >= 5)
 				intakeMotor.set(-1);
-			else intakeMotor.set(0);
-			
-			if (manipulatorStick.getRawButton(1)){
-				climberMotor1.set(1); climberMotor2.set(1);
+			else
+				intakeMotor.set(0);
+
+			// climber section
+			if (manipulatorStick.getRawButton(1)) {
+				climberMotor1.set(1);
+				climberMotor2.set(1);
 			}
-			
-			else{
-			climberMotor1.set(0);
-			climberMotor2.set(0);
-			
+
+			else {
+				climberMotor1.set(0);
+				climberMotor2.set(0);
+
 			}
-			
+
+			// TESTING
+			/*
+			 * if (driverStick.getRawButton(1) == true && gearSolenoid.get() ==
+			 * Value.kReverse) //detects if the A button is pressed
+			 * gearSolenoid.set(DoubleSolenoid.Value.kForward); // extends gear
+			 * piston else if (!driverStick.getRawButton(1) &&
+			 * gearSolenoid.get() == Value.kForward)
+			 * gearSolenoid.set(DoubleSolenoid.Value.kReverse);
+			 * 
+			 * if (manipulatorStick.getRawAxis(2) >=.5) { // detects if left
+			 * trigger is pressed more than halfway shooterSolenoid1.set(false);
+			 * // retracts piston, lets balls enter shooter
+			 * shooterMotor1.set(-1); // activates shooter motor }. else {
+			 * shooterSolenoid1.set(true); shooterMotor1.set(0); } if
+			 * (manipulatorStick.getRawAxis(3) >=.5) {
+			 * shooterSolenoid2.set(false); shooterMotor2.set(1); } else {
+			 * shooterSolenoid2.set(true); shooterMotor2.set(0); }
+			 */
+			//
+			// END BUTTON IF ELSE SECTION
+			// ///////////////////////////////////////////////////////
+
+			if (driveSystem.getCurrentGear() == GearShift.kLowGear) {
+				SmartDashboard.putString("GearShift", "LowGear");
+			} else {
+				SmartDashboard.putString("GearShift", "HighGear");
+			}
+
 			boolean switchPressure = compressor.getPressureSwitchValue();
 			boolean compressorState = compressor.enabled();
 			SmartDashboard.putString("DB/String 0", "compressor state:" + compressorState);
 			SmartDashboard.putString("DB/String 1", "Pressure switch:" + switchPressure);
 		}
 	}
+
 	/**
 	 * Runs during test mode
 	 */
 	@Override
 	public void test() {
+	}
+
+	@Override
+	public void pidWrite(double output) {
+		SmartDashboard.putNumber("Rotate to angle rate", output);
+		rotateToAngleRate = output;
 	}
 }
