@@ -69,12 +69,12 @@ public class Robot extends SampleRobot implements PIDOutput {
 	XBoxController driverStick = new XBoxController(new Joystick(0));
 	AHRS ahrs;
 	PIDController turnController;
-	static final double kP = 10;
-	static final double kI = 20000;
+	static final double kP = .1;
+	static final double kI = .001;
 	static final double kD = 0.00;
 	static final double kF = 0.00;
 
-	static final double kToleranceDegrees = 0;
+	static final double kToleranceDegrees = 2;
 	double rotateToAngleRate = 0;
 
 	final String defaultAuto = "Default Autonomous";
@@ -93,8 +93,8 @@ public class Robot extends SampleRobot implements PIDOutput {
 		SmartDashboard.putData("Auto modes", chooser);
 		compressor.start();
 		driveSystem = new GearShift(shiftSolenoid1, shiftSolenoid2);
-
-		ahrs = new AHRS(I2C.Port.kMXP);
+	
+		ahrs = new AHRS(I2C.Port.kOnboard);
 		turnController = new PIDController(kP, kI, kD, kF, ahrs, this);
 		turnController.setInputRange(-180.0f, 180.0f);
 		turnController.setOutputRange(-0.5, 0.5);
@@ -262,6 +262,12 @@ public class Robot extends SampleRobot implements PIDOutput {
 			boolean compressorState = compressor.enabled();
 			SmartDashboard.putString("DB/String 0", "compressor state:" + compressorState);
 			SmartDashboard.putString("DB/String 1", "Pressure switch:" + switchPressure);
+			
+			SmartDashboard.putNumber("left speed", leftY);
+			SmartDashboard.putNumber("Right speed" , rightY);
+			SmartDashboard.putString("Turn controller", turnController.isEnabled()?"true":"false");
+			SmartDashboard.putNumber("rotation", ahrs.getAngle());
+			
 		}
 	}
 
