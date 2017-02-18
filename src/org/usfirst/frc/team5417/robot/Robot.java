@@ -1,14 +1,10 @@
 package org.usfirst.frc.team5417.robot;
 
 import edu.wpi.first.wpilibj.RobotDrive;
-import edu.wpi.first.wpilibj.SPI;
 import edu.wpi.first.wpilibj.SampleRobot;
 import edu.wpi.first.wpilibj.Solenoid;
-import edu.wpi.first.wpilibj.Spark;
 import edu.wpi.first.wpilibj.CameraServer;
 import edu.wpi.first.wpilibj.Compressor;
-import edu.wpi.first.wpilibj.DoubleSolenoid;
-import edu.wpi.first.wpilibj.DoubleSolenoid.Value;
 import edu.wpi.first.wpilibj.GenericHID;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.PIDController;
@@ -18,10 +14,12 @@ import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.GenericHID.Hand;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj.DoubleSolenoid;
 
 import org.usfirst.frc.team5417.cv2017.Stopwatch;
 
 import com.ctre.CANTalon;
+import com.ctre.CANTalon.FeedbackDevice;
 import com.kauailabs.navx.frc.AHRS;
 import edu.wpi.first.wpilibj.I2C;
 
@@ -55,17 +53,16 @@ public class Robot extends SampleRobot implements PIDOutput {
 	CANTalon intakeMotor = new CANTalon(8);
 	CANTalon climberMotor1 = new CANTalon(9);
 	CANTalon climberMotor2 = new CANTalon(10);
-	Solenoid gearSolenoid = new Solenoid(1, 0);
-	// DoubleSolenoid gearSolenoid = new DoubleSolenoid(0,1);
-	Solenoid shooterSolenoid1 = new Solenoid(1, 1);
+	Solenoid gearSolenoid = new Solenoid(1, 5);
+//	DoubleSolenoid gearSolenoid = new DoubleSolenoid(0,1);
+	Solenoid shooterSolenoid1 = new Solenoid(1, 6);
 	Solenoid shooterSolenoid2 = new Solenoid(1, 2);
 	Compressor compressor = new Compressor(1);
 	GearShift driveSystem;
-	Solenoid shiftSolenoid1 = new Solenoid(0, 0);
-	Solenoid shiftSolenoid2 = new Solenoid(0, 1);
+	DoubleSolenoid shiftSolenoid1 = new DoubleSolenoid(0, 1);
 	RobotDrive myRobot = new RobotDrive(leftFrontMotor, leftRearMotor, rightFrontMotor, rightRearMotor);
 	XBoxController driverStick = new XBoxController(new Joystick(0));
-	XBoxController manipulatorStick = new XBoxController(new Joystick(0));
+	XBoxController manipulatorStick = new XBoxController(new Joystick(1));
 	AHRS ahrs;
 	PIDController turnController;
 	static final double kP = .1;
@@ -77,6 +74,7 @@ public class Robot extends SampleRobot implements PIDOutput {
 	double rotateToAngleRate = 0;
 
 	Stopwatch elapsedTimeWithNoDriveInputs = null;
+	Stopwatch elapsedTimeSinceLastGearShift = Stopwatch.startNew();
 
 	final String defaultAuto = "Default Autonomous";
 	final String customAuto = "My Auto";
@@ -93,7 +91,7 @@ public class Robot extends SampleRobot implements PIDOutput {
 		chooser.addObject("My Auto", customAuto);
 		SmartDashboard.putData("Auto modes", chooser);
 		compressor.start();
-		driveSystem = new GearShift(shiftSolenoid1, shiftSolenoid2);
+		driveSystem = new GearShift(shiftSolenoid1);
 
 		ahrs = new AHRS(I2C.Port.kOnboard);
 		turnController = new PIDController(kP, kI, kD, kF, ahrs, this);
@@ -101,6 +99,8 @@ public class Robot extends SampleRobot implements PIDOutput {
 		turnController.setOutputRange(-0.5, 0.5);
 		turnController.setAbsoluteTolerance(kToleranceDegrees);
 		turnController.setContinuous(true);
+		leftShooterMotor.setFeedbackDevice(FeedbackDevice.QuadEncoder);
+//		leftShooterMotor.setMotionMagicCruiseVelocity(motMagicCruiseVeloc);
 	}
 
 	/**
@@ -180,6 +180,12 @@ public class Robot extends SampleRobot implements PIDOutput {
 				leftY = leftY / 2 + rotateToAngleRate;
 				rightY = rightY / 2 - rotateToAngleRate;
 			}
+			
+			if (elapsedTimeSinceLastGearShift.getTotalSeconds() <= 0.1) {
+				leftY = 0;
+				rightY = 0;
+			}
+			
 			myRobot.tankDrive(leftY, rightY);
 
 			Timer.delay(0.005); // wait for a motor update time
@@ -195,9 +201,10 @@ public class Robot extends SampleRobot implements PIDOutput {
 			// gear shift section
 			if (driverStick.isFirstLBPressed() && getElapsedSecondsWithNoDriveInputs() > 0.1) {
 				driveSystem.gearShiftLow(leftY, rightY);
-
+				elapsedTimeSinceLastGearShift = Stopwatch.startNew();
 			} else if (driverStick.isFirstRBPressed() && getElapsedSecondsWithNoDriveInputs() > 0.1) {
 				driveSystem.gearShiftHigh(leftY, rightY);
+				elapsedTimeSinceLastGearShift = Stopwatch.startNew();
 			}
 			// navX control section
 			else if (driverStick.isStartHeldDown()) {
@@ -215,7 +222,7 @@ public class Robot extends SampleRobot implements PIDOutput {
 			// intake section
 			if (driverStick.getRTValue() >= .5)
 				intakeMotor.set(1);
-			else if (driverStick.getLTValue() >= 5)
+			else if (driverStick.getLTValue() >= .5)
 				intakeMotor.set(-1);
 			else
 				intakeMotor.set(0);
@@ -245,9 +252,11 @@ public class Robot extends SampleRobot implements PIDOutput {
 
 			if (manipulatorStick.getLTValue() >= .5) {
 				// detects if left trigger is pressed more than halfway
-				// shooterSolenoid1.set(false);
+				 shooterSolenoid1.set(false);
 				// retracts piston, lets balls enter shooter
-				leftShooterMotor.set(-1); // activates shooter motor }. else {
+				 leftShooterMotor.set(-1);
+				}
+			else {
 				shooterSolenoid1.set(true);
 				leftShooterMotor.set(0);
 			}
@@ -280,6 +289,7 @@ public class Robot extends SampleRobot implements PIDOutput {
 			SmartDashboard.putNumber("rotation", ahrs.getAngle());
 
 			SmartDashboard.putNumber("time w/o drive inputs", getElapsedSecondsWithNoDriveInputs());
+			SmartDashboard.putBoolean("A buton", manipulatorStick.isAHeldDown());
 		}
 	}
 
