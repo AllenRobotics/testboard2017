@@ -3,6 +3,8 @@ package org.usfirst.frc.team5417.robot;
 import edu.wpi.first.wpilibj.RobotDrive;
 import edu.wpi.first.wpilibj.SampleRobot;
 import edu.wpi.first.wpilibj.Solenoid;
+import edu.wpi.cscore.CvSource;
+import edu.wpi.cscore.VideoCamera;
 import edu.wpi.first.wpilibj.CameraServer;
 import edu.wpi.first.wpilibj.Compressor;
 import edu.wpi.first.wpilibj.GenericHID;
@@ -16,7 +18,16 @@ import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.DoubleSolenoid;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
+import org.usfirst.frc.team5417.cv2017.ChannelRange;
+import org.usfirst.frc.team5417.cv2017.ComputerVision2017;
+import org.usfirst.frc.team5417.cv2017.ComputerVisionResult;
 import org.usfirst.frc.team5417.cv2017.Stopwatch;
+import org.usfirst.frc.team5417.cv2017.opencvops.BooleanMatrix;
 
 import com.ctre.CANTalon;
 import com.ctre.CANTalon.FeedbackDevice;
@@ -41,10 +52,33 @@ import edu.wpi.first.wpilibj.I2C;
  * instead if you're new.
  */
 public class Robot extends SampleRobot implements PIDOutput {
-	// private CameraServer cameraServer;
+//	private CameraServer cameraServer;
+//	private CameraReader cameraReader;
+//	private CvSource computerVisionOutputStream;
+	ChannelRange hueRange = new ChannelRange(150, 200);
+	ChannelRange satRange = new ChannelRange(0.2, 1.0);
+	ChannelRange valRange = new ChannelRange(180, 256);
+
+	List<BooleanMatrix> horizontalTemplates = new ArrayList<BooleanMatrix>();
+	List<BooleanMatrix> verticalTemplates = new ArrayList<BooleanMatrix>();
+
+	int dilateErodeKernelSize = 3;
+	int removeGroupsSmallerThan = 12;
+	int numberOfScaleFactors = 20;
+	double minimumTemplateMatchPercentage = 0.7;
+
+	// dummy PID that wants to approach 4 feet
+	// private PID distancePID = new PID(1, 20000, 0, PIDSourceType.kRate, 4);
+
+	double[] gearLookUpTable = { 250, // 0 feet
+			104, // 1 foot
+			53.7, 37.5, 28, 22.5, 19, 16.4, 14.2, 12.4, 11.6, 10.6, // 11 feet
+			0 // BEYOND
+	};
+	
+	
 	// XboxController stick = new XboxController(0);
 	// XboxController stick1 = new XboxController(1);
-	private CameraServer cameraServer;
 	CANTalon leftFrontMotor = new CANTalon(2);
 	CANTalon leftRearMotor = new CANTalon(3);
 	CANTalon rightFrontMotor = new CANTalon(4);
@@ -54,11 +88,11 @@ public class Robot extends SampleRobot implements PIDOutput {
 	CANTalon intakeMotor = new CANTalon(8);
 	CANTalon climberMotor1 = new CANTalon(9);
 	CANTalon climberMotor2 = new CANTalon(10);
-	Solenoid gearSolenoid = new Solenoid(1, 5);
+	Solenoid gearSolenoid = new Solenoid(0, 5);
 //	DoubleSolenoid gearSolenoid = new DoubleSolenoid(0,1);
-	Solenoid shooterSolenoid1 = new Solenoid(1, 6);
-	Solenoid shooterSolenoid2 = new Solenoid(1, 2);
-	Compressor compressor = new Compressor(1);
+	Solenoid shooterSolenoid1 = new Solenoid(0, 6);
+	Solenoid shooterSolenoid2 = new Solenoid(0, 2);
+	Compressor compressor = new Compressor(0);
 	GearShift driveSystem;
 	DoubleSolenoid shiftSolenoid1 = new DoubleSolenoid(0, 1);
 	RobotDrive myRobot = new RobotDrive(leftFrontMotor, leftRearMotor, rightFrontMotor, rightRearMotor);
@@ -81,15 +115,46 @@ public class Robot extends SampleRobot implements PIDOutput {
 	final String customAuto = "My Auto";
 	final String otherAuto = "other auto";
 	SendableChooser<String> chooser = new SendableChooser<>();
-
+	private boolean isGearCamera = false;
+	private VideoCamera activeCamera = null;
+//	public VideoCamera switchCamera() {
+//		if (activeCamera != null) {
+//			cameraServer.removeCamera(activeCamera.getName());
+//		}
+//		if (isGearCamera) {
+//			activeCamera = cameraServer.startAutomaticCapture(0);
+//		}
+//		else {
+//			activeCamera =cameraServer.startAutomaticCapture(1);
+//		}
+//		isGearCamera = !isGearCamera;
+//		cameraReader = new CameraReader(activeCamera);
+//		return activeCamera;
+//	}
 	public Robot() {
-		myRobot.setExpiration(0.1);
+		myRobot.setExpiration(0.5);
+//		cameraServer = CameraServer.getInstance();
+//		switchCamera();
+
+//		computerVisionOutputStream = CameraServer.getInstance().putVideo("CV2017", 320, 240);
+
+		// String camera = "cam0";
+
+		// cameraReader = new CameraReader(camera);
+		
+		// horizontalTemplates.add(new BooleanMatrix(40, 150, true));
+		// horizontalTemplates.add(new BooleanMatrix(20, 150, true));
+		horizontalTemplates.add(new BooleanMatrix(20, 75, true));
+		horizontalTemplates.add(new BooleanMatrix(10, 75, true));
+
+		// verticalTemplates.add(new BooleanMatrix(150, 60, true));
+		verticalTemplates.add(new BooleanMatrix(75, 30, true));
 	}
 
 	@Override
 	public void robotInit() {
-		cameraServer = CameraServer.getInstance();
-		cameraServer.startAutomaticCapture();// "cam0", 0);
+//		cameraServer = CameraServer.getInstance();
+//		cameraServer.startAutomaticCapture();// "cam0", 0);
 
 		chooser.addDefault("Default Auto", defaultAuto);
 		chooser.addObject("My Auto", customAuto);
@@ -162,12 +227,30 @@ public class Robot extends SampleRobot implements PIDOutput {
 		return value;
 	}
 
+//	public ComputerVisionResult doComputerVision(CameraReader cameraReader, List<BooleanMatrix> templatesToUse, double[] lookUpTableToUse) {
+//		ComputerVision2017 gearCV2017 = new ComputerVision2017();
+//		ComputerVisionResult cvResult = gearCV2017.DoComputerVision(cameraReader, 320, hueRange, satRange,
+//				valRange, dilateErodeKernelSize, removeGroupsSmallerThan, numberOfScaleFactors,
+//				minimumTemplateMatchPercentage, templatesToUse, lookUpTableToUse);
+//
+//		SmartDashboard.putNumber("CV distance", cvResult.distance);
+//
+//		if (cvResult.visionResult != null) {
+//			Mat euc3 = new Mat();
+//			cvResult.visionResult.assignTo(euc3, CvType.CV_8UC3);
+////			computerVisionOutputStream.putFrame(euc3);
+//
+//			cvResult.visionResult.release();
+//			euc3.release();
+//		}
+//		return cvResult;
+//	}
 	@Override
 	public void operatorControl() {
 
 		myRobot.setSafetyEnabled(true);
 		while (isOperatorControl() && isEnabled()) {
-
+//			ComputerVisionResult cvResult = doComputerVision(this.cameraReader, this.verticalTemplates, this.gearLookUpTable);
 			double leftY = getJoystickValueWithDeadZone(driverStick.getLYValue());
 			double rightY = getJoystickValueWithDeadZone(driverStick.getRYValue());
 
@@ -202,7 +285,9 @@ public class Robot extends SampleRobot implements PIDOutput {
 			// BEGIN BUTTON IF ELSE SECTION
 			//
 			//
-
+//			if (driverStick.isFirstBackPressed()) {
+//				switchCamera();
+//			}
 			// gear shift section
 			if (driverStick.isFirstLBPressed() && getElapsedSecondsWithNoDriveInputs() > 0.1) {
 				driveSystem.gearShiftLow(leftY, rightY);
@@ -233,7 +318,7 @@ public class Robot extends SampleRobot implements PIDOutput {
 				intakeMotor.set(0);
 
 			// climber section
-			if (driverStick.isYHeldDown()) {
+			if (manipulatorStick.isYHeldDown()) {
 				climberMotor1.set(1);
 				climberMotor2.set(1);
 			}

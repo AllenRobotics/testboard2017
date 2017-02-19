@@ -9,6 +9,8 @@ public class XBoxController {
 	boolean LBbuttonPress = false;
 	boolean wasRBPressed = false;
 	boolean RBbuttonPress = false;
+	boolean wasBackPressed = false;
+	boolean backButtonPressed = false;
 
 	public XBoxController(Joystick driverStick) {
 		this.driverStick = driverStick;
@@ -92,8 +94,28 @@ public class XBoxController {
 	public boolean isStartHeldDown() {
 		return driverStick.getRawButton(8);
 	}
+	public boolean isBackHeldDown() {
+		return driverStick.getRawButton(7);
+	}
 	public boolean isDPadUpHeldDown() {
 		return driverStick.getPOV(0) == 0;
+	}
+	public boolean isFirstBackPressed() {
+		if (driverStick.getRawButton(7)) {
+			if (wasBackPressed)
+				backButtonPressed = false;
+			else
+				backButtonPressed = true;
+
+			wasBackPressed = true;
+		}
+		
+		else {
+			wasBackPressed = false;
+			backButtonPressed = false;
+		}
+		return backButtonPressed;
+		
 	}
 }
 
