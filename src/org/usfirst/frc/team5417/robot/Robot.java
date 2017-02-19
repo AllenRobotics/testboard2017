@@ -44,6 +44,7 @@ public class Robot extends SampleRobot implements PIDOutput {
 	// private CameraServer cameraServer;
 	// XboxController stick = new XboxController(0);
 	// XboxController stick1 = new XboxController(1);
+	private CameraServer cameraServer;
 	CANTalon leftFrontMotor = new CANTalon(2);
 	CANTalon leftRearMotor = new CANTalon(3);
 	CANTalon rightFrontMotor = new CANTalon(4);
@@ -87,6 +88,9 @@ public class Robot extends SampleRobot implements PIDOutput {
 
 	@Override
 	public void robotInit() {
+		cameraServer = CameraServer.getInstance();
+		cameraServer.startAutomaticCapture();// "cam0", 0);
+
 		chooser.addDefault("Default Auto", defaultAuto);
 		chooser.addObject("My Auto", customAuto);
 		SmartDashboard.putData("Auto modes", chooser);
@@ -185,7 +189,8 @@ public class Robot extends SampleRobot implements PIDOutput {
 				leftY = 0;
 				rightY = 0;
 			}
-			
+			leftY = -leftY;
+			rightY = -rightY;
 			myRobot.tankDrive(leftY, rightY);
 
 			Timer.delay(0.005); // wait for a motor update time
@@ -228,7 +233,7 @@ public class Robot extends SampleRobot implements PIDOutput {
 				intakeMotor.set(0);
 
 			// climber section
-			if (manipulatorStick.isAHeldDown()) {
+			if (driverStick.isYHeldDown()) {
 				climberMotor1.set(1);
 				climberMotor2.set(1);
 			}
