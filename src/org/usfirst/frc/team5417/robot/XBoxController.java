@@ -41,7 +41,7 @@ public class XBoxController {
 	public boolean isFirstRBPressed() {
 		if (driverStick.getRawButton(6)) {
 			if (wasRBPressed)
-				LBbuttonPress = false;
+				RBbuttonPress = false;
 			else
 				RBbuttonPress = true;
 
