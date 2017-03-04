@@ -3,7 +3,9 @@ package org.usfirst.frc.team5417.robot;
 import edu.wpi.first.wpilibj.RobotDrive;
 import edu.wpi.first.wpilibj.SampleRobot;
 import edu.wpi.first.wpilibj.Solenoid;
+import edu.wpi.first.wpilibj.Talon;
 import edu.wpi.cscore.CvSource;
+import edu.wpi.cscore.UsbCamera;
 import edu.wpi.cscore.VideoCamera;
 import edu.wpi.first.wpilibj.CameraServer;
 import edu.wpi.first.wpilibj.Compressor;
@@ -13,10 +15,12 @@ import edu.wpi.first.wpilibj.PIDController;
 import edu.wpi.first.wpilibj.PIDOutput;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.XboxController;
+import edu.wpi.first.wpilibj.command.Command;
 import edu.wpi.first.wpilibj.GenericHID.Hand;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.DoubleSolenoid;
+import edu.wpi.first.wpilibj.DoubleSolenoid.Value;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,10 +55,11 @@ import edu.wpi.first.wpilibj.I2C;
  * be much more difficult under this system. Use IterativeRobot or Command-Based
  * instead if you're new.
  */
-public class Robot extends SampleRobot implements PIDOutput {
-	private CameraServer cameraServer;
-	// private CameraReader cameraReader;
-	// private CvSource computerVisionOutputStream;
+public class Robot extends SampleRobot {
+	private CameraServer cameraServer = null;
+	private CameraReader cameraReader = null;
+	private UsbCamera gearCamera = null;
+	private CvSource computerVisionOutputStream = null;
 	ChannelRange hueRange = new ChannelRange(150, 200);
 	ChannelRange satRange = new ChannelRange(0.2, 1.0);
 	ChannelRange valRange = new ChannelRange(180, 256);
@@ -84,21 +89,26 @@ public class Robot extends SampleRobot implements PIDOutput {
 	CANTalon rightRearMotor = new CANTalon(5);
 	CANTalon leftShooterMotor = new CANTalon(6);
 	CANTalon rightShooterMotor = new CANTalon(7);
-	CANTalon intakeMotor = new CANTalon(8);
+	Talon intakeMotor = new Talon(3);
+	Talon intakeMotor2 = new Talon(2);
 	CANTalon climberMotor1 = new CANTalon(9);
 	CANTalon climberMotor2 = new CANTalon(10);
-	Solenoid gearSolenoid = new Solenoid(0, 1);
+	Solenoid gearSolenoid = new Solenoid(0);
 	// DoubleSolenoid gearSolenoid = new DoubleSolenoid(0,1);
 	Solenoid shooterSolenoid1 = new Solenoid(2);
 	Solenoid shooterSolenoid2 = new Solenoid(3);
 	Compressor compressor = new Compressor(0);
 	GearShift driveSystem;
-	Solenoid shiftSolenoid1 = new Solenoid(0);
-	RobotDrive myRobot = new RobotDrive(leftFrontMotor, leftRearMotor, rightFrontMotor, rightRearMotor);
+	Solenoid shiftSolenoid1 = new Solenoid(5);
+	RobotDrive myRobot = new RobotDrive(0, 1);
 	XBoxController driverStick = new XBoxController(new Joystick(0));
 	XBoxController manipulatorStick = new XBoxController(new Joystick(1));
 	AHRS ahrs;
 	PIDController turnController;
+	PIDController offsetFromCenterController;
+	UpdatablePIDSource offsetFromCenter;
+	UpdatablePIDOutput offsetFromCenterOutput;
+	UpdatablePIDOutput turnOutput;
 	static final double kP = .1;
 	static final double kI = .001;
 	static final double kD = 0.00;
@@ -109,7 +119,7 @@ public class Robot extends SampleRobot implements PIDOutput {
 
 	static final double kToleranceDegrees = 2;
 	double rotateToAngleRate = 0;
-
+	double goToCenterRate = 0;
 	Stopwatch elapsedTimeWithNoDriveInputs = null;
 	Stopwatch elapsedTimeSinceLastGearShift = Stopwatch.startNew();
 
@@ -117,66 +127,79 @@ public class Robot extends SampleRobot implements PIDOutput {
 	final String customAuto = "My Auto";
 	final String otherAuto = "other auto";
 	SendableChooser<String> chooser = new SendableChooser<>();
-	// private boolean isGearCamera = false;
-	// private VideoCamera activeCamera = null;
 
-	// public VideoCamera switchCamera() {
-	// if (activeCamera != null) {
-	// cameraServer.removeCamera(activeCamera.getName());
-	// }
-	// if (isGearCamera) {
-	// activeCamera = cameraServer.startAutomaticCapture(0);
-	// }
-	// else {
-	// activeCamera =cameraServer.startAutomaticCapture(1);
-	// }
-	// isGearCamera = !isGearCamera;
-	// cameraReader = new CameraReader(activeCamera);
-	// return activeCamera;
-	// }
-	//
 	public Robot() {
 		myRobot.setExpiration(0.5);
-		cameraServer = CameraServer.getInstance();
-		cameraServer.startAutomaticCapture();
-
-		// switchCamera();
-
-		// computerVisionOutputStream =
-		// CameraServer.getInstance().putVideo("CV2017", 320, 240);
-
-		// cameraReader = new CameraReader(camera);
 
 		// horizontalTemplates.add(new BooleanMatrix(40, 150, true));
 		// horizontalTemplates.add(new BooleanMatrix(20, 150, true));
-		horizontalTemplates.add(new BooleanMatrix(20, 75, true));
-		horizontalTemplates.add(new BooleanMatrix(10, 75, true));
+		// horizontalTemplates.add(new BooleanMatrix(20, 75, true));
+		// horizontalTemplates.add(new BooleanMatrix(10, 75, true));
 
-		// verticalTemplates.add(new BooleanMatrix(150, 60, true));
+		verticalTemplates.add(new BooleanMatrix(150, 60, true));
 		verticalTemplates.add(new BooleanMatrix(75, 30, true));
 	}
 
 	@Override
 	public void robotInit() {
-		// cameraServer = CameraServer.getInstance();
-		// cameraServer.startAutomaticCapture();// "cam0", 0);
+
+		if (computerVisionOutputStream != null) {
+			computerVisionOutputStream.free();
+			computerVisionOutputStream = null;
+		}
+		
+		if (cameraReader != null) {
+			cameraReader.free();
+			cameraReader = null;
+		}
+		
+		if (gearCamera != null) {
+			gearCamera.free();
+			gearCamera = null;
+		}
+		
+		cameraServer = CameraServer.getInstance();
+		gearCamera = cameraServer.startAutomaticCapture();
+		
+
+		cameraReader = new CameraReader(cameraServer.getVideo());
+		computerVisionOutputStream = cameraServer.putVideo("CV2017", 160, 120);
 
 		chooser.addDefault("Default Auto", defaultAuto);
 		chooser.addObject("My Auto", customAuto);
 		SmartDashboard.putData("Auto modes", chooser);
 		compressor.start();
 		driveSystem = new GearShift(shiftSolenoid1);
-
+		leftShooterMotor.setFeedbackDevice(FeedbackDevice.QuadEncoder);
+// these are decent defaults
+//		static final double kP = .1;
+//		static final double kI = .001;
+//		static final double kD = 0.00;
+//		static final double kF = 0.00;
+		
 		ahrs = new AHRS(I2C.Port.kOnboard);
-		turnController = new PIDController(kP, kI, kD, kF, ahrs, this);
+		turnOutput = new UpdatablePIDOutput();
+		turnController = new PIDController(0.1, 0.001, 0.00, 0.00, ahrs, turnOutput);
 		turnController.setInputRange(-180.0f, 180.0f);
 		turnController.setOutputRange(-0.5, 0.5);
-		turnController.setAbsoluteTolerance(kToleranceDegrees);
+		turnController.setAbsoluteTolerance(0);
 		turnController.setContinuous(true);
-		leftShooterMotor.setFeedbackDevice(FeedbackDevice.QuadEncoder);
+		
+		offsetFromCenter = new UpdatablePIDSource();
+		offsetFromCenterOutput = new UpdatablePIDOutput();
+		offsetFromCenterController = new PIDController(0.02, 0.001, 0.00, 0.00, offsetFromCenter, offsetFromCenterOutput);
+		offsetFromCenterController.setInputRange(-80.0f, 80.0f);
+		offsetFromCenterController.setOutputRange(-0.5, 0.5);
+		offsetFromCenterController.setAbsoluteTolerance(0);
+		offsetFromCenterController.setContinuous(true);
+
 		// leftShooterMotor.setMotionMagicCruiseVelocity(motMagicCruiseVeloc);
 	}
 
+	// public void autonomousInit(){
+	// automonousCommand = (Command) chooser.getSelected();
+	// automonousCommand.start();
+	// }
 	/**
 	 * This autonomous (along with the chooser code above) shows how to select
 	 * between different autonomous modes using the dashboard. The sendable
@@ -232,52 +255,73 @@ public class Robot extends SampleRobot implements PIDOutput {
 		return value;
 	}
 
-	// public ComputerVisionResult doComputerVision(CameraReader cameraReader,
-	// List<BooleanMatrix> templatesToUse, double[] lookUpTableToUse) {
-	// ComputerVision2017 gearCV2017 = new ComputerVision2017();
-	// ComputerVisionResult cvResult = gearCV2017.DoComputerVision(cameraReader,
-	// 320, hueRange, satRange,
-	// valRange, dilateErodeKernelSize, removeGroupsSmallerThan,
-	// numberOfScaleFactors,
-	// minimumTemplateMatchPercentage, templatesToUse, lookUpTableToUse);
-	//
-	// SmartDashboard.putNumber("CV distance", cvResult.distance);
-	//
-	// if (cvResult.visionResult != null) {
-	// Mat euc3 = new Mat();
-	// cvResult.visionResult.assignTo(euc3, CvType.CV_8UC3);
-	//// computerVisionOutputStream.putFrame(euc3);
-	//
-	// cvResult.visionResult.release();
-	// euc3.release();
-	// }
-	// return cvResult;
-	// }
-	
+	public ComputerVisionResult doComputerVision(CameraReader cameraReader, List<BooleanMatrix> templatesToUse,
+			double[] lookUpTableToUse) {
+		if (templatesToUse == null) {
+			System.out.println("templatesToUse is null");
+		}
+		if (lookUpTableToUse == null) {
+			System.out.println("lookUpTableToUse is null");
+		}
+
+		ComputerVision2017 gearCV2017 = new ComputerVision2017();
+		ComputerVisionResult cvResult = gearCV2017.DoComputerVision(cameraReader, 160, hueRange, satRange, valRange,
+				dilateErodeKernelSize, removeGroupsSmallerThan, numberOfScaleFactors, minimumTemplateMatchPercentage,
+				templatesToUse, lookUpTableToUse);
+
+		SmartDashboard.putNumber("DoCV distance", cvResult.distance);
+		SmartDashboard.putString("DoCV Target Point", "(" + cvResult.targetPoint.getX() + ", " + cvResult.targetPoint.getY() + ")");
+
+		if (cvResult.visionResult != null) {
+			Mat euc3 = new Mat();
+			cvResult.visionResult.assignTo(euc3, CvType.CV_8UC3);
+			computerVisionOutputStream.putFrame(euc3);
+
+			cvResult.visionResult.release();
+			euc3.release();
+		}
+		return cvResult;
+	}
+
 	private boolean isCloseToZero(double value, double tolerance) {
 		tolerance = Math.abs(tolerance);
 		return value > -tolerance && value < tolerance;
 	}
-	
+
 	@Override
 	public void operatorControl() {
 		myRobot.setSafetyEnabled(true);
 		while (isOperatorControl() && isEnabled()) {
-			// ComputerVisionResult cvResult =
-			// doComputerVision(this.cameraReader, this.verticalTemplates,
-			// this.gearLookUpTable);
+			ComputerVisionResult cvResult = doComputerVision(this.cameraReader, this.verticalTemplates,
+					this.gearLookUpTable);
+
+			SmartDashboard.putNumber("After DoCV distance", cvResult.distance);
+			SmartDashboard.putString("After DoCV Target Point", "(" + cvResult.targetPoint.getX() + ", " + cvResult.targetPoint.getY() + ")");
+			double offset = cvResult.didSucceed ? cvResult.targetPoint.getX() - 80.0 : 0;
+			SmartDashboard.putNumber("Offset From Center", offset);
+			
+			if (offset != 0 && cvResult.didSucceed) {
+				offsetFromCenterController.enable();
+			}
+			else if (offset == 0) {
+				goToCenterRate = 0;
+				offsetFromCenterController.disable();
+			}
+			
+			offsetFromCenter.update(offset);
 			
 			// forward on the stick is negative, we think. so, we subtract 1
 			// and negate to deal with positive values for forward.
 			// also, adjust to [0,2] range.
-			
+
 			double leftY = -(getJoystickValueWithDeadZone(driverStick.getLYValue()) - 1);
 			double rightY = -(getJoystickValueWithDeadZone(driverStick.getRYValue()) - 1);
 			
+
 			// undo the [0,2] range adjustment
 			leftY = Math.max(leftY, defaultLeftY) - 1;
 			rightY = Math.max(rightY, defaultRightY) - 1;
-			
+
 			if (isCloseToZero(leftY, 0.1) && isCloseToZero(rightY, 0.1)) {
 				if (elapsedTimeWithNoDriveInputs == null) {
 					elapsedTimeWithNoDriveInputs = Stopwatch.startNew();
@@ -285,11 +329,22 @@ public class Robot extends SampleRobot implements PIDOutput {
 			} else {
 				elapsedTimeWithNoDriveInputs = null;
 			}
+
+			updateFromTurnController(turnOutput.getValue());
+			updateFromOffsetFromCenterController(offsetFromCenterOutput.getValue());
+			
 			// apply rotateToAngleRate if necessary
 			if (turnController.isEnabled()) {
 				leftY = leftY / 2 + rotateToAngleRate;
 				rightY = rightY / 2 - rotateToAngleRate;
 			}
+			else if (offsetFromCenterController.isEnabled()) {
+				leftY = leftY / 2 - goToCenterRate;
+				rightY = rightY / 2 + goToCenterRate;
+			}
+
+			SmartDashboard.putNumber("left speed", leftY);
+			SmartDashboard.putNumber("Right speed", rightY);
 
 			if (elapsedTimeSinceLastGearShift.getTotalSeconds() <= 0.1) {
 				leftY = 0;
@@ -342,6 +397,14 @@ public class Robot extends SampleRobot implements PIDOutput {
 				defaultLeftY = 2.0;
 				defaultRightY = 2.0;
 			} else {
+				// do this in autonomous if didSucceed is false so we keep driving straight
+//				if (!cvResult.didSucceed) {
+//					turnController.enable();
+//				}
+//				else {
+//					turnController.disable();
+//				}
+
 				defaultLeftY = 0;
 				defaultRightY = 0;
 				turnController.disable();
@@ -354,6 +417,10 @@ public class Robot extends SampleRobot implements PIDOutput {
 				intakeMotor.set(-1);
 			else
 				intakeMotor.set(0);
+			if (driverStick.isXHeldDown()) {
+				intakeMotor2.set(1);
+			} else
+				intakeMotor2.set(0);
 
 			// climber section
 			if (manipulatorStick.isYHeldDown()) {
@@ -410,13 +477,11 @@ public class Robot extends SampleRobot implements PIDOutput {
 			SmartDashboard.putString("DB/String 0", "compressor state:" + compressorState);
 			SmartDashboard.putString("DB/String 1", "Pressure switch:" + switchPressure);
 
-			SmartDashboard.putNumber("left speed", leftY);
-			SmartDashboard.putNumber("Right speed", rightY);
 			SmartDashboard.putString("Turn controller", turnController.isEnabled() ? "true" : "false");
 			SmartDashboard.putNumber("rotation", ahrs.getAngle());
 
 			SmartDashboard.putNumber("time w/o drive inputs", getElapsedSecondsWithNoDriveInputs());
-			SmartDashboard.putBoolean("A buton", manipulatorStick.isAHeldDown());
+			SmartDashboard.putBoolean("A button", manipulatorStick.isAHeldDown());
 		}
 	}
 
@@ -431,9 +496,13 @@ public class Robot extends SampleRobot implements PIDOutput {
 	public void test() {
 	}
 
-	@Override
-	public void pidWrite(double output) {
+
+	public void updateFromTurnController (double output) {
 		SmartDashboard.putNumber("Rotate to angle rate", output);
 		rotateToAngleRate = output;
+	}
+	public void updateFromOffsetFromCenterController (double output) {
+		SmartDashboard.putNumber("OFC ctl output" , output);
+		goToCenterRate = output;
 	}
 }

@@ -11,16 +11,12 @@ import edu.wpi.first.wpilibj.CameraServer;
 
 public class CameraReader implements ImageReader {
 
-	String camera;
-	private CameraServer cameraServer;
 	private CvSink visionCameraSink;
 
 	private Mat frame = new Mat();
 	
-	public CameraReader(VideoCamera camera) {
-		//this.camera = camera;
-		cameraServer = CameraServer.getInstance();
-		visionCameraSink = cameraServer.getVideo(camera.getName());
+	public CameraReader(CvSink cameraSink) {
+		visionCameraSink = cameraSink;
 	}
 
 	@Override
@@ -36,6 +32,12 @@ public class CameraReader implements ImageReader {
 		resizedFrame.release();
 		
 		return f32f;
+	}
+	
+	public void free() {
+		if (visionCameraSink != null) {
+			visionCameraSink.free();
+		}
 	}
 
 }
