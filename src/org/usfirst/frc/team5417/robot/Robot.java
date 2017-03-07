@@ -1,5 +1,4 @@
 package org.usfirst.frc.team5417.robot;
-
 import edu.wpi.first.wpilibj.RobotDrive;
 import edu.wpi.first.wpilibj.SampleRobot;
 import edu.wpi.first.wpilibj.Solenoid;
@@ -93,8 +92,8 @@ public class Robot extends SampleRobot {
 	Talon intakeMotor2 = new Talon(2);
 	CANTalon climberMotor1 = new CANTalon(9);
 	CANTalon climberMotor2 = new CANTalon(10);
-	Solenoid gearSolenoid = new Solenoid(0);
-	// DoubleSolenoid gearSolenoid = new DoubleSolenoid(0,1);
+	// Solenoid gearSolenoid = new Solenoid(0);
+	DoubleSolenoid gearSolenoid = new DoubleSolenoid(0, 1);
 	Solenoid shooterSolenoid1 = new Solenoid(2);
 	Solenoid shooterSolenoid2 = new Solenoid(3);
 	Compressor compressor = new Compressor(0);
@@ -104,6 +103,8 @@ public class Robot extends SampleRobot {
 	XBoxController driverStick = new XBoxController(new Joystick(0));
 	XBoxController manipulatorStick = new XBoxController(new Joystick(1));
 	AHRS ahrs;
+	double leftY;
+	double rightY;
 	PIDController turnController;
 	PIDController offsetFromCenterController;
 	UpdatablePIDSource offsetFromCenter;
@@ -124,7 +125,7 @@ public class Robot extends SampleRobot {
 	Stopwatch elapsedTimeSinceLastGearShift = Stopwatch.startNew();
 
 	final String defaultAuto = "Default Autonomous";
-	final String customAuto = "My Auto";
+	final String gearTestAuto = "Gear Test Auto";
 	final String otherAuto = "other auto";
 	SendableChooser<String> chooser = new SendableChooser<>();
 
@@ -147,47 +148,47 @@ public class Robot extends SampleRobot {
 			computerVisionOutputStream.free();
 			computerVisionOutputStream = null;
 		}
-		
+
 		if (cameraReader != null) {
 			cameraReader.free();
 			cameraReader = null;
 		}
-		
+
 		if (gearCamera != null) {
 			gearCamera.free();
 			gearCamera = null;
 		}
-		
+
 		cameraServer = CameraServer.getInstance();
 		gearCamera = cameraServer.startAutomaticCapture();
-		
 
 		cameraReader = new CameraReader(cameraServer.getVideo());
 		computerVisionOutputStream = cameraServer.putVideo("CV2017", 160, 120);
 
 		chooser.addDefault("Default Auto", defaultAuto);
-		chooser.addObject("My Auto", customAuto);
+		chooser.addObject("My Auto", gearTestAuto);
 		SmartDashboard.putData("Auto modes", chooser);
 		compressor.start();
 		driveSystem = new GearShift(shiftSolenoid1);
 		leftShooterMotor.setFeedbackDevice(FeedbackDevice.QuadEncoder);
-// these are decent defaults
-//		static final double kP = .1;
-//		static final double kI = .001;
-//		static final double kD = 0.00;
-//		static final double kF = 0.00;
-		
+		// these are decent defaults
+		// static final double kP = .1;
+		// static final double kI = .001;
+		// static final double kD = 0.00;
+		// static final double kF = 0.00;
+
 		ahrs = new AHRS(I2C.Port.kOnboard);
 		turnOutput = new UpdatablePIDOutput();
-		turnController = new PIDController(0.1, 0.001, 0.00, 0.00, ahrs, turnOutput);
+		turnController = new PIDController(0.01, 0.001, 0.001, 0.00, ahrs, turnOutput);
 		turnController.setInputRange(-180.0f, 180.0f);
-		turnController.setOutputRange(-0.5, 0.5);
+		turnController.setOutputRange(-0.2, 0.2);
 		turnController.setAbsoluteTolerance(0);
 		turnController.setContinuous(true);
-		
+
 		offsetFromCenter = new UpdatablePIDSource();
 		offsetFromCenterOutput = new UpdatablePIDOutput();
-		offsetFromCenterController = new PIDController(0.02, 0.001, 0.00, 0.00, offsetFromCenter, offsetFromCenterOutput);
+		offsetFromCenterController = new PIDController(0.01, 0.001, 0.001, 0.00, offsetFromCenter,
+				offsetFromCenterOutput);
 		offsetFromCenterController.setInputRange(-80.0f, 80.0f);
 		offsetFromCenterController.setOutputRange(-0.5, 0.5);
 		offsetFromCenterController.setAbsoluteTolerance(0);
@@ -213,17 +214,47 @@ public class Robot extends SampleRobot {
 	 */
 	@Override
 	public void autonomous() {
-		String autoSelected = chooser.getSelected();
-		// String autoSelected = SmartDashboard.getString("Auto Selector",
-		// defaultAuto);
+		// String autoSelected = chooser.getSelected();
+		String autoSelected = SmartDashboard.getString("Auto Selector", defaultAuto);
 		System.out.println("Auto selected: " + autoSelected);
 
 		switch (autoSelected) {
-		case customAuto:
+		case gearTestAuto:
 			myRobot.setSafetyEnabled(false);
-			myRobot.drive(-0.5, 1.0); // spin at half speed
-			Timer.delay(2.0); // for 2 seconds
-			myRobot.drive(0.0, 0.0); // stop robot
+			turnController.enable();
+			ahrs.reset();
+			Timer.delay(1);
+			turnController.setSetpoint(ahrs.getAngle());
+			turnController.setOutputRange(-0.3, 0.3);
+			double time = 0;
+			Stopwatch driveStraightStopwatch = Stopwatch.startNew();
+//			while ( time < 2.3) {
+//				leftY = .7 + rotateToAngleRate;
+//				rightY = .7 - rotateToAngleRate;
+//				myRobot.tankDrive(leftY, rightY);
+//				time = driveStraightStopwatch.getTotalSeconds();
+//				updateFromTurnController(turnOutput.getValue());
+//			}
+			driveStraightStopwatch.stop();
+			boolean aligned = false;
+			while (!aligned) {
+				ComputerVisionResult cvResult = doComputerVision(this.cameraReader, this.verticalTemplates,
+						this.gearLookUpTable);
+				if (cvResult.targetPoint.getX() == -1) {
+					myRobot.tankDrive(-.6, .6);
+				}
+				else if (80 - cvResult.targetPoint.getX() > 0){
+					myRobot.tankDrive(-.3, .3);
+				}
+				else if (80 - cvResult.targetPoint.getX() < 40) {
+					myRobot.tankDrive(-.2, .2);
+				}
+				else if (80 - cvResult.targetPoint.getX() < 5) {
+					aligned = true;
+				}
+			}
+			turnController.disable();
+			myRobot.tankDrive(0.0, 0.0);
 			break;
 		case defaultAuto:
 		default:
@@ -270,7 +301,8 @@ public class Robot extends SampleRobot {
 				templatesToUse, lookUpTableToUse);
 
 		SmartDashboard.putNumber("DoCV distance", cvResult.distance);
-		SmartDashboard.putString("DoCV Target Point", "(" + cvResult.targetPoint.getX() + ", " + cvResult.targetPoint.getY() + ")");
+		SmartDashboard.putString("DoCV Target Point",
+				"(" + cvResult.targetPoint.getX() + ", " + cvResult.targetPoint.getY() + ")");
 
 		if (cvResult.visionResult != null) {
 			Mat euc3 = new Mat();
@@ -290,33 +322,31 @@ public class Robot extends SampleRobot {
 
 	@Override
 	public void operatorControl() {
-		myRobot.setSafetyEnabled(true);
+		myRobot.setSafetyEnabled(true);		
 		while (isOperatorControl() && isEnabled()) {
 			ComputerVisionResult cvResult = doComputerVision(this.cameraReader, this.verticalTemplates,
 					this.gearLookUpTable);
-
 			SmartDashboard.putNumber("After DoCV distance", cvResult.distance);
-			SmartDashboard.putString("After DoCV Target Point", "(" + cvResult.targetPoint.getX() + ", " + cvResult.targetPoint.getY() + ")");
+			SmartDashboard.putString("After DoCV Target Point",
+					"(" + cvResult.targetPoint.getX() + ", " + cvResult.targetPoint.getY() + ")");
 			double offset = cvResult.didSucceed ? cvResult.targetPoint.getX() - 80.0 : 0;
 			SmartDashboard.putNumber("Offset From Center", offset);
-			
-			if (offset != 0 && cvResult.didSucceed) {
+
+			if (offset != 0 && cvResult.didSucceed && driverStick.isBackHeldDown()) {
 				offsetFromCenterController.enable();
-			}
-			else if (offset == 0) {
+			} else if (offset == 0) {
 				goToCenterRate = 0;
 				offsetFromCenterController.disable();
 			}
-			
+
 			offsetFromCenter.update(offset);
-			
+
 			// forward on the stick is negative, we think. so, we subtract 1
 			// and negate to deal with positive values for forward.
 			// also, adjust to [0,2] range.
 
-			double leftY = -(getJoystickValueWithDeadZone(driverStick.getLYValue()) - 1);
-			double rightY = -(getJoystickValueWithDeadZone(driverStick.getRYValue()) - 1);
-			
+			leftY = -(getJoystickValueWithDeadZone(driverStick.getLYValue()) - 1);
+			rightY = -(getJoystickValueWithDeadZone(driverStick.getRYValue()) - 1);
 
 			// undo the [0,2] range adjustment
 			leftY = Math.max(leftY, defaultLeftY) - 1;
@@ -332,13 +362,12 @@ public class Robot extends SampleRobot {
 
 			updateFromTurnController(turnOutput.getValue());
 			updateFromOffsetFromCenterController(offsetFromCenterOutput.getValue());
-			
+
 			// apply rotateToAngleRate if necessary
 			if (turnController.isEnabled()) {
-				leftY = leftY / 2 + rotateToAngleRate;
-				rightY = rightY / 2 - rotateToAngleRate;
-			}
-			else if (offsetFromCenterController.isEnabled()) {
+				leftY = .8 + rotateToAngleRate;
+				rightY = .8 - rotateToAngleRate;
+			} else if (offsetFromCenterController.isEnabled()) {
 				leftY = leftY / 2 - goToCenterRate;
 				rightY = rightY / 2 + goToCenterRate;
 			}
@@ -397,13 +426,14 @@ public class Robot extends SampleRobot {
 				defaultLeftY = 2.0;
 				defaultRightY = 2.0;
 			} else {
-				// do this in autonomous if didSucceed is false so we keep driving straight
-//				if (!cvResult.didSucceed) {
-//					turnController.enable();
-//				}
-//				else {
-//					turnController.disable();
-//				}
+				// do this in autonomous if didSucceed is false so we keep
+				// driving straight
+				// if (!cvResult.didSucceed) {
+				// turnController.enable();
+				// }
+				// else {
+				// turnController.disable();
+				// }
 
 				defaultLeftY = 0;
 				defaultRightY = 0;
@@ -417,7 +447,7 @@ public class Robot extends SampleRobot {
 				intakeMotor.set(-1);
 			else
 				intakeMotor.set(0);
-			if (driverStick.isXHeldDown()) {
+			if (manipulatorStick.isXHeldDown()) {
 				intakeMotor2.set(1);
 			} else
 				intakeMotor2.set(0);
@@ -438,11 +468,11 @@ public class Robot extends SampleRobot {
 
 			if (manipulatorStick.isAHeldDown() == true) {
 				// detects if the A button is pressed
-				gearSolenoid.set(true);
+				gearSolenoid.set(Value.kForward);
 			}
 			// extends gear piston
 			else {
-				gearSolenoid.set(false);
+				gearSolenoid.set(Value.kReverse);
 			}
 
 			if (manipulatorStick.getLTValue() >= .5) {
@@ -496,13 +526,13 @@ public class Robot extends SampleRobot {
 	public void test() {
 	}
 
-
-	public void updateFromTurnController (double output) {
+	public void updateFromTurnController(double output) {
 		SmartDashboard.putNumber("Rotate to angle rate", output);
 		rotateToAngleRate = output;
 	}
-	public void updateFromOffsetFromCenterController (double output) {
-		SmartDashboard.putNumber("OFC ctl output" , output);
+
+	public void updateFromOffsetFromCenterController(double output) {
+		SmartDashboard.putNumber("OFC ctl output", output);
 		goToCenterRate = output;
 	}
 }
