@@ -1,4 +1,5 @@
 package org.usfirst.frc.team5417.robot;
+
 import edu.wpi.first.wpilibj.RobotDrive;
 import edu.wpi.first.wpilibj.SampleRobot;
 import edu.wpi.first.wpilibj.Solenoid;
@@ -88,18 +89,18 @@ public class Robot extends SampleRobot {
 	CANTalon rightRearMotor = new CANTalon(5);
 	CANTalon leftShooterMotor = new CANTalon(6);
 	CANTalon rightShooterMotor = new CANTalon(7);
-	Talon intakeMotor = new Talon(3);
-	Talon intakeMotor2 = new Talon(2);
+	CANTalon intakeMotor = new CANTalon(8);
+	CANTalon intakeMotor2 = new CANTalon(11);
 	CANTalon climberMotor1 = new CANTalon(9);
 	CANTalon climberMotor2 = new CANTalon(10);
-	// Solenoid gearSolenoid = new Solenoid(0);
-	DoubleSolenoid gearSolenoid = new DoubleSolenoid(0, 1);
+	Solenoid gearSolenoid = new Solenoid(0, 1);
+	// DoubleSolenoid gearSolenoid = new DoubleSolenoid(0, 1);
 	Solenoid shooterSolenoid1 = new Solenoid(2);
 	Solenoid shooterSolenoid2 = new Solenoid(3);
 	Compressor compressor = new Compressor(0);
 	GearShift driveSystem;
-	Solenoid shiftSolenoid1 = new Solenoid(5);
-	RobotDrive myRobot = new RobotDrive(0, 1);
+	Solenoid shiftSolenoid1 = new Solenoid(0);
+	RobotDrive myRobot = new RobotDrive(leftFrontMotor, leftRearMotor, rightFrontMotor, rightRearMotor);
 	XBoxController driverStick = new XBoxController(new Joystick(0));
 	XBoxController manipulatorStick = new XBoxController(new Joystick(1));
 	AHRS ahrs;
@@ -225,34 +226,51 @@ public class Robot extends SampleRobot {
 			ahrs.reset();
 			Timer.delay(1);
 			turnController.setSetpoint(ahrs.getAngle());
-			turnController.setOutputRange(-0.3, 0.3);
+			turnController.setOutputRange(-0.5, 0.5);
 			double time = 0;
 			Stopwatch driveStraightStopwatch = Stopwatch.startNew();
-//			while ( time < 2.3) {
-//				leftY = .7 + rotateToAngleRate;
-//				rightY = .7 - rotateToAngleRate;
-//				myRobot.tankDrive(leftY, rightY);
-//				time = driveStraightStopwatch.getTotalSeconds();
-//				updateFromTurnController(turnOutput.getValue());
-//			}
+			while (time < 1.5) {
+				leftY = .5 + rotateToAngleRate;
+				rightY = .5 - rotateToAngleRate;
+				myRobot.tankDrive(leftY, rightY);
+				time = driveStraightStopwatch.getTotalSeconds();
+				updateFromTurnController(turnOutput.getValue());
+			}
 			driveStraightStopwatch.stop();
 			boolean aligned = false;
 			while (!aligned) {
 				ComputerVisionResult cvResult = doComputerVision(this.cameraReader, this.verticalTemplates,
 						this.gearLookUpTable);
 				if (cvResult.targetPoint.getX() == -1) {
-					myRobot.tankDrive(-.6, .6);
-				}
-				else if (80 - cvResult.targetPoint.getX() > 0){
-					myRobot.tankDrive(-.3, .3);
-				}
-				else if (80 - cvResult.targetPoint.getX() < 40) {
+					myRobot.tankDrive(-.4, .4);
+				} else if (Math.abs(80 - cvResult.targetPoint.getX()) > 0) {
 					myRobot.tankDrive(-.2, .2);
-				}
-				else if (80 - cvResult.targetPoint.getX() < 5) {
+				} else if (Math.abs(80 - cvResult.targetPoint.getX()) < 40) {
+					myRobot.tankDrive(-.1, .1);
+				} else if (Math.abs(80 - cvResult.targetPoint.getX()) < 10) {
 					aligned = true;
 				}
 			}
+			myRobot.tankDrive(0.0, 0.0);
+			Timer.delay(1);
+			Stopwatch driveStraightStopwatch2 = Stopwatch.startNew();
+			time = 0;
+			ahrs.reset();
+			turnController.setSetpoint(ahrs.getAngle());
+			turnController.setOutputRange(-.1, .1);
+			rotateToAngleRate = 0;
+			while (time < 5) {
+				leftY = .1 + rotateToAngleRate;
+				rightY = .1 - rotateToAngleRate;
+				myRobot.tankDrive(leftY, rightY);
+				time = driveStraightStopwatch2.getTotalSeconds();
+				updateFromTurnController(turnOutput.getValue());
+			}
+			gearSolenoid.set(true);
+			Timer.delay(1);
+			gearSolenoid.set(false);
+			myRobot.tankDrive(-.3, .3);
+			Timer.delay(1);
 			turnController.disable();
 			myRobot.tankDrive(0.0, 0.0);
 			break;
@@ -322,7 +340,7 @@ public class Robot extends SampleRobot {
 
 	@Override
 	public void operatorControl() {
-		myRobot.setSafetyEnabled(true);		
+		myRobot.setSafetyEnabled(true);
 		while (isOperatorControl() && isEnabled()) {
 			ComputerVisionResult cvResult = doComputerVision(this.cameraReader, this.verticalTemplates,
 					this.gearLookUpTable);
@@ -332,7 +350,7 @@ public class Robot extends SampleRobot {
 			double offset = cvResult.didSucceed ? cvResult.targetPoint.getX() - 80.0 : 0;
 			SmartDashboard.putNumber("Offset From Center", offset);
 
-			if (offset != 0 && cvResult.didSucceed && driverStick.isBackHeldDown()) {
+			if (offset != 0 && cvResult.didSucceed && driverStick.isXHeldDown()) {
 				offsetFromCenterController.enable();
 			} else if (offset == 0) {
 				goToCenterRate = 0;
@@ -468,11 +486,11 @@ public class Robot extends SampleRobot {
 
 			if (manipulatorStick.isAHeldDown() == true) {
 				// detects if the A button is pressed
-				gearSolenoid.set(Value.kForward);
+				gearSolenoid.set(true);
 			}
 			// extends gear piston
 			else {
-				gearSolenoid.set(Value.kReverse);
+				gearSolenoid.set(false);
 			}
 
 			if (manipulatorStick.getLTValue() >= .5) {
