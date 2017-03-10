@@ -60,9 +60,9 @@ public class Robot extends SampleRobot {
 	private CameraReader cameraReader = null;
 	private UsbCamera gearCamera = null;
 	private CvSource computerVisionOutputStream = null;
-	ChannelRange hueRange = new ChannelRange(150, 200);
-	ChannelRange satRange = new ChannelRange(0.2, 1.0);
-	ChannelRange valRange = new ChannelRange(180, 256);
+	ChannelRange hueRange = new ChannelRange(0, 256);
+	ChannelRange satRange = new ChannelRange(0, .1);
+	ChannelRange valRange = new ChannelRange(220, 256);
 
 	List<BooleanMatrix> horizontalTemplates = new ArrayList<BooleanMatrix>();
 	List<BooleanMatrix> verticalTemplates = new ArrayList<BooleanMatrix>();
@@ -104,6 +104,7 @@ public class Robot extends SampleRobot {
 	XBoxController driverStick = new XBoxController(new Joystick(0));
 	XBoxController manipulatorStick = new XBoxController(new Joystick(1));
 	AHRS ahrs;
+	boolean centered = false;
 	double leftY;
 	double rightY;
 	PIDController turnController;
@@ -128,6 +129,8 @@ public class Robot extends SampleRobot {
 	final String defaultAuto = "Default Autonomous";
 	final String gearTestAuto = "Gear Test Auto";
 	final String otherAuto = "other auto";
+	final String centerAuto = "Center auto";
+	final String driveStraight = "Drive straight";
 	SendableChooser<String> chooser = new SendableChooser<>();
 
 	public Robot() {
@@ -166,9 +169,9 @@ public class Robot extends SampleRobot {
 		cameraReader = new CameraReader(cameraServer.getVideo());
 		computerVisionOutputStream = cameraServer.putVideo("CV2017", 160, 120);
 
-		chooser.addDefault("Default Auto", defaultAuto);
-		chooser.addObject("My Auto", gearTestAuto);
-		SmartDashboard.putData("Auto modes", chooser);
+		// chooser.addDefault("Default Auto", defaultAuto);
+		// chooser.addObject("My Auto", gearTestAuto);
+		// SmartDashboard.putData("Auto modes", chooser);
 		compressor.start();
 		driveSystem = new GearShift(shiftSolenoid1);
 		leftShooterMotor.setFeedbackDevice(FeedbackDevice.QuadEncoder);
@@ -236,32 +239,40 @@ public class Robot extends SampleRobot {
 				time = driveStraightStopwatch.getTotalSeconds();
 				updateFromTurnController(turnOutput.getValue());
 			}
+			SmartDashboard.putString("Auto status", "drive forward end");
 			driveStraightStopwatch.stop();
 			boolean aligned = false;
 			while (!aligned) {
 				ComputerVisionResult cvResult = doComputerVision(this.cameraReader, this.verticalTemplates,
 						this.gearLookUpTable);
+				SmartDashboard.putString("DoCV Target Point",
+						"(" + cvResult.targetPoint.getX() + ", " + cvResult.targetPoint.getY() + ")");
 				if (cvResult.targetPoint.getX() == -1) {
 					myRobot.tankDrive(-.4, .4);
-				} else if (Math.abs(80 - cvResult.targetPoint.getX()) > 0) {
-					myRobot.tankDrive(-.2, .2);
-				} else if (Math.abs(80 - cvResult.targetPoint.getX()) < 40) {
-					myRobot.tankDrive(-.1, .1);
+					SmartDashboard.putString("Auto status", "vision loop: point out of sight");
 				} else if (Math.abs(80 - cvResult.targetPoint.getX()) < 10) {
 					aligned = true;
+					SmartDashboard.putString("Auto status", "vision loop: point in center");
+					myRobot.tankDrive(0.0, 0.0);
+				} else if (Math.abs(80 - cvResult.targetPoint.getX()) < 40) {
+					myRobot.tankDrive(-.2, .2);
+					SmartDashboard.putString("Auto status", "vision loop: point almost in center");
+				} else if (Math.abs(80 - cvResult.targetPoint.getX()) > 0) {
+					myRobot.tankDrive(-.3, .3);
+					SmartDashboard.putString("Auto status", "vision loop: point not in center");
 				}
 			}
-			myRobot.tankDrive(0.0, 0.0);
+			SmartDashboard.putString("Auto status", "vision loop end");
 			Timer.delay(1);
 			Stopwatch driveStraightStopwatch2 = Stopwatch.startNew();
 			time = 0;
 			ahrs.reset();
 			turnController.setSetpoint(ahrs.getAngle());
-			turnController.setOutputRange(-.1, .1);
+			turnController.setOutputRange(-.3, .3);
 			rotateToAngleRate = 0;
-			while (time < 5) {
-				leftY = .1 + rotateToAngleRate;
-				rightY = .1 - rotateToAngleRate;
+			while (time < 2) {
+				leftY = .4 + rotateToAngleRate;
+				rightY = .4 - rotateToAngleRate;
 				myRobot.tankDrive(leftY, rightY);
 				time = driveStraightStopwatch2.getTotalSeconds();
 				updateFromTurnController(turnOutput.getValue());
@@ -269,7 +280,7 @@ public class Robot extends SampleRobot {
 			gearSolenoid.set(true);
 			Timer.delay(1);
 			gearSolenoid.set(false);
-			myRobot.tankDrive(-.3, .3);
+			myRobot.tankDrive(-.4, -.4);
 			Timer.delay(1);
 			turnController.disable();
 			myRobot.tankDrive(0.0, 0.0);
@@ -281,6 +292,55 @@ public class Robot extends SampleRobot {
 			Timer.delay(2.0); // for 2 seconds
 			myRobot.drive(0.0, 0.0); // stop robot
 			break;
+		case centerAuto:
+			myRobot.setSafetyEnabled(false);
+			turnController.enable();
+			ahrs.reset();
+			driveSystem.gearShiftLow(0, 0);
+			Timer.delay(1);
+			rotateToAngleRate = 0;
+			turnController.setSetpoint(ahrs.getAngle());
+			turnController.setOutputRange(-0.5, 0.5);
+			time = 0;
+			Stopwatch driveStraightCenterStopwatch = Stopwatch.startNew();
+			while (time < 2.2) {
+				leftY = .6 + rotateToAngleRate;
+				rightY = .6 - rotateToAngleRate;
+				myRobot.tankDrive(leftY, rightY);
+				time = driveStraightCenterStopwatch.getTotalSeconds();
+				updateFromTurnController(turnOutput.getValue());
+			}
+			myRobot.tankDrive(0, 0);
+			
+			turnController.disable();
+			gearSolenoid.set(true);
+			Timer.delay(1);
+			gearSolenoid.set(false);
+			myRobot.tankDrive(-.3, .3);
+			Timer.delay(2);
+			myRobot.tankDrive(0, 0);
+			break;
+		case driveStraight:
+			myRobot.setSafetyEnabled(false);
+			turnController.enable();
+			ahrs.reset();
+			driveSystem.gearShiftLow(0, 0);
+			Timer.delay(1);
+			rotateToAngleRate = 0;
+			turnController.setSetpoint(ahrs.getAngle());
+			turnController.setOutputRange(-0.5, 0.5);
+			time = 0;
+			Stopwatch driveStraightOnlyStopwatch = Stopwatch.startNew();
+			while (time < 2.2) {
+				leftY = .6 + rotateToAngleRate;
+				rightY = .6 - rotateToAngleRate;
+				myRobot.tankDrive(leftY, rightY);
+				time = driveStraightOnlyStopwatch.getTotalSeconds();
+				updateFromTurnController(turnOutput.getValue());
+			}
+			myRobot.tankDrive(0, 0);
+			
+			turnController.disable();
 
 		}
 	}
@@ -342,22 +402,23 @@ public class Robot extends SampleRobot {
 	public void operatorControl() {
 		myRobot.setSafetyEnabled(true);
 		while (isOperatorControl() && isEnabled()) {
-			ComputerVisionResult cvResult = doComputerVision(this.cameraReader, this.verticalTemplates,
-					this.gearLookUpTable);
-			SmartDashboard.putNumber("After DoCV distance", cvResult.distance);
-			SmartDashboard.putString("After DoCV Target Point",
-					"(" + cvResult.targetPoint.getX() + ", " + cvResult.targetPoint.getY() + ")");
-			double offset = cvResult.didSucceed ? cvResult.targetPoint.getX() - 80.0 : 0;
-			SmartDashboard.putNumber("Offset From Center", offset);
 
-			if (offset != 0 && cvResult.didSucceed && driverStick.isXHeldDown()) {
-				offsetFromCenterController.enable();
-			} else if (offset == 0) {
-				goToCenterRate = 0;
-				offsetFromCenterController.disable();
+			if (driverStick.isXHeldDown()) {
+				ComputerVisionResult cvResult = doComputerVision(this.cameraReader, this.verticalTemplates,
+						this.gearLookUpTable);
+				SmartDashboard.putNumber("After DoCV distance", cvResult.distance);
+				SmartDashboard.putString("After DoCV Target Point",
+						"(" + cvResult.targetPoint.getX() + ", " + cvResult.targetPoint.getY() + ")");
+				double offset = cvResult.didSucceed ? cvResult.targetPoint.getX() - 80.0 : 0;
+				SmartDashboard.putNumber("Offset From Center", offset);
+				if (offset != 0 && cvResult.didSucceed) {
+					offsetFromCenterController.enable();
+				} else if (offset == 0) {
+					goToCenterRate = 0;
+					offsetFromCenterController.disable();
+					offsetFromCenter.update(offset);
+				}
 			}
-
-			offsetFromCenter.update(offset);
 
 			// forward on the stick is negative, we think. so, we subtract 1
 			// and negate to deal with positive values for forward.
@@ -388,6 +449,18 @@ public class Robot extends SampleRobot {
 			} else if (offsetFromCenterController.isEnabled()) {
 				leftY = leftY / 2 - goToCenterRate;
 				rightY = rightY / 2 + goToCenterRate;
+			} else if (driverStick.isBackHeldDown() & !centered) {
+				ComputerVisionResult cvResult = doComputerVision(this.cameraReader, this.verticalTemplates,
+						this.gearLookUpTable);
+				if (cvResult.targetPoint.getX() == -1) {
+					myRobot.tankDrive(-.4, .4);
+				} else if (Math.abs(80 - cvResult.targetPoint.getX()) > 0) {
+					myRobot.tankDrive(-.2, .2);
+				} else if (Math.abs(80 - cvResult.targetPoint.getX()) < 40) {
+					myRobot.tankDrive(-.1, .1);
+				} else if (Math.abs(80 - cvResult.targetPoint.getX()) < 10) {
+					centered = true;
+				}
 			}
 
 			SmartDashboard.putNumber("left speed", leftY);
