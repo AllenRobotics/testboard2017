@@ -11,6 +11,8 @@ public class XBoxController {
 	boolean RBbuttonPress = false;
 	boolean wasBackPressed = false;
 	boolean backButtonPressed = false;
+	boolean YButtonPressed = false;
+	boolean wasYPressed = false;
 
 	public XBoxController(Joystick driverStick) {
 		this.driverStick = driverStick;
@@ -115,6 +117,23 @@ public class XBoxController {
 			backButtonPressed = false;
 		}
 		return backButtonPressed;
+		
+	}
+	public boolean isFirstYPressed() {
+		if (driverStick.getRawButton(4)) {
+			if (wasYPressed)
+				YButtonPressed = false;
+			else
+				YButtonPressed = true;
+
+			wasYPressed = true;
+		}
+		
+		else {
+			wasYPressed = false;
+			YButtonPressed = false;
+		}
+		return YButtonPressed;
 		
 	}
 }
